@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend: FastAPI + LangGraph
+  # ---------------------------------------------------------------------------
+  backend:
+    build: ./backend
+    container_name: doc-agent-backend
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/creds.json:/app/creds.json
+    environment:
+      - PROJECT_NAME=DocExtractor
+      - DATABASE_URL=postgresql://user:password@db:5432/doc_extractor
+      # For GCS, mount your credentials file to /app/gcp-creds.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/creds.json
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend: Next.js
+  # ---------------------------------------------------------------------------
+  # frontend:
+  #   build: ./frontend
+  #   container_name: doc-agent-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     # Client-side calls (Browser -> Backend)
+  #     # In local dev, the browser is on the host, so it hits localhost:8000
+  #     - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - app-network
+
+  # ---------------------------------------------------------------------------
+  # Database: PostgreSQL
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: doc-agent-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=doc_extractor
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d doc_extractor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
